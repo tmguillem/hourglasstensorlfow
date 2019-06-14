@@ -139,7 +139,7 @@ class DataGenerator():
             line = line.split(' ')
             name = line[0]
             name = name + 'A'
-            box = list((-1,) * 4)
+            box = list([0, 0, 255, 255])
             joints = self.annotations_2d[i]
             joints = list(np.reshape(joints, [-1, 1])[:, 0])
             if self.toReduce:
@@ -256,7 +256,7 @@ class DataGenerator():
                 hm[:, :, i] = np.zeros((height, width))
         return hm
 
-    def _crop_data(self, height, width, box, joints, boxp=0.05):
+    def _crop_data(self, height, width, box, joints, boxp=0.00):
         """ Automatically returns a padding vector and a bounding box given
         the size of the image and a list of joints.
         Args:
@@ -267,33 +267,7 @@ class DataGenerator():
             boxp		: Box percentage (Use 20% to get a good bounding box)
         """
         padding = [[0, 0], [0, 0], [0, 0]]
-        j = np.copy(joints)
-        if box[0:2] == [-1, -1]:
-            j[joints == -1] = 1e5
-            box[0], box[1] = min(j[:, 0]), min(j[:, 1])
-        crop_box = [box[0] - int(boxp * (box[2] - box[0])), box[1] - int(boxp * (box[3] - box[1])),
-                    box[2] + int(boxp * (box[2] - box[0])), box[3] + int(boxp * (box[3] - box[1]))]
-        if crop_box[0] < 0: crop_box[0] = 0
-        if crop_box[1] < 0: crop_box[1] = 0
-        if crop_box[2] > width - 1: crop_box[2] = width - 1
-        if crop_box[3] > height - 1: crop_box[3] = height - 1
-        new_h = int(crop_box[3] - crop_box[1])
-        new_w = int(crop_box[2] - crop_box[0])
-        crop_box = [crop_box[0] + new_w // 2, crop_box[1] + new_h // 2, new_w, new_h]
-        if new_h > new_w:
-            bounds = (crop_box[0] - new_h // 2, crop_box[0] + new_h // 2)
-            if bounds[0] < 0:
-                padding[1][0] = abs(bounds[0])
-            if bounds[1] > width - 1:
-                padding[1][1] = abs(width - bounds[1])
-        elif new_h < new_w:
-            bounds = (crop_box[1] - new_w // 2, crop_box[1] + new_w // 2)
-            if bounds[0] < 0:
-                padding[0][0] = abs(bounds[0])
-            if bounds[1] > width - 1:
-                padding[0][1] = abs(height - bounds[1])
-        crop_box[0] += padding[1][0]
-        crop_box[1] += padding[0][0]
+        crop_box = box
         return padding, crop_box
 
     def _crop_img(self, img, padding, crop_box):
@@ -389,7 +363,7 @@ class DataGenerator():
                         img = img.astype(np.uint8)
                         # On 16 image per batch
                         # Avg Time -OpenCV : 1.0 s -skimage: 1.25 s -scipy.misc.imresize: 1.05s
-                        img = scm.imresize(img, (256, 256))
+                        img = cv2.resize(img, (256, 256))
                         # Less efficient that OpenCV resize method
                         # img = transform.resize(img, (256,256), preserve_range = True, mode = 'constant')
                         # May Cause trouble, bug in OpenCV imgwrap.cpp:3229
@@ -432,12 +406,12 @@ class DataGenerator():
                     weight = np.asarray(self.data_dict[name]['weights'])
                     train_weights[i] = weight
                     img = self.open_img(name)
-                    padd, cbox = self._crop_data(img.shape[0], img.shape[1], box, joints, boxp=0.2)
+                    padd, cbox = self._crop_data(img.shape[0], img.shape[1], box, joints, boxp=0.0)
                     new_j = self._relative_joints(cbox, padd, joints, to_size=64)
                     hm = self._generate_hm(64, 64, new_j, 64, weight)
-                    img = self._crop_img(img, padd, cbox)
+                    # img = self._crop_img(img, padd, cbox)
                     img = img.astype(np.uint8)
-                    img = scm.imresize(img, (256, 256))
+                    img = cv2.resize(img, (256, 256))
                     img, hm = self._augment(img, hm)
                     hm = np.expand_dims(hm, axis=0)
                     hm = np.repeat(hm, stacks, axis=0)
@@ -515,7 +489,7 @@ class DataGenerator():
             rimg = self._crop_img(img, padd, box)
             # See Error in self._generator
             # rimg = cv2.resize(rimg, (256,256))
-            rimg = scm.imresize(rimg, (256, 256))
+            rimg = cv2.resize(rimg, (256, 256))
             # rhm = np.zeros((256,256,16))
             # for i in range(16):
             #	rhm[:,:,i] = cv2.resize(rHM[:,:,i], (256,256))
@@ -576,7 +550,7 @@ class DataGenerator():
                 joint_full = joint_full - [cbox[0] - max_l // 2, cbox[1] - max_l // 2]
                 img = self._crop_img(img, padd, cbox)
                 img = img.astype(np.uint8)
-                img = scm.imresize(img, (256, 256))
+                img = cv2.resize(img, (256, 256))
                 return img, new_j, w, joint_full, max_l
             except:
                 return False
